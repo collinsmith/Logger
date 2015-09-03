@@ -3,6 +3,8 @@
 #endif
 #define _logger_included
 
+#pragma reqlib logger
+
 #include "include/logger_const.inc"
 
 /**

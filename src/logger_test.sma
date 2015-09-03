@@ -2,13 +2,8 @@
 
 #include <amxmodx>
 
-#include "include/logger_const.inc"
+#include "include/logger.inc"
 #include "include/param_test_stocks.inc"
-
-native Logger:CreateLogger(const name[] = NULL_STRING);
-native bool:DestroyLogger(&Logger:logger);
-native Log(Logger:logger, level, const format[], any:...);
-
 
 public plugin_init() {
     new Logger:logger = CreateLogger();
