@@ -7,6 +7,7 @@
 #define LOGGER_DATESTAMPFORMAT_LENGTH 31
 #define LOGGER_PATH_LENGTH (PLATFORM_MAX_PATH-1)
 #define LOGGER_FILENAME_LENGTH 31
+#define LOGGER_FUNCTIONNAMEBUFFER_LENGTH 31
 #define LOGGER_MESSAGEBUFFER_LENGTH 1023
 #define BUFFER_LENGTH 1023
 
@@ -17,12 +18,9 @@
 #include "include/param_test_stocks.inc"
 
 static const DEFAULT_FILENAME_FORMAT[] = "%filename_%date.log";
-static const DEFAULT_MESSAGE_FORMAT[] = "%time %severity %message";
+static const DEFAULT_MESSAGE_FORMAT[] = "%time %severity [%function] %message";
 static const DEFAULT_DATESTAMP_FORMAT[] = "%Y-%m-%d";
 static const DEFAULT_TIMESTAMP_FORMAT[] = "%H:%M:%S";
-
-static filenameBufferLen;
-static filenameBuffer[LOGGER_FILENAME_LENGTH+1];
 
 static timestampBufferLen;
 static timestampBuffer[LOGGER_TIMESTAMPFORMAT_LENGTH+1];
@@ -38,9 +36,6 @@ static pathBuffer[LOGGER_PATH_LENGTH+1];
 
 static bufferLen;
 static buffer[BUFFER_LENGTH+1];
-
-//static filenameFormatBufferLen;
-//static filenameFormatBuffer[LOGGER_FILENAMEFORMAT_LENGTH+1];
 
 static globalSeverity;
 static numLoggers;
@@ -419,12 +414,12 @@ log(pluginId, numParams, offs, Logger:logger, severity) {
         return;
     }
 
-    filenameBufferLen = ArrayGetString(
+    /*filenameBufferLen = ArrayGetString(
             loggerFileNames,
             index,
             filenameBuffer,
             LOGGER_FILENAME_LENGTH);
-    filenameBuffer[filenameBufferLen] = EOS;
+    filenameBuffer[filenameBufferLen] = EOS;*/
     
     bufferLen = ArrayGetString(
             loggerTimestampFormats,
@@ -452,6 +447,17 @@ log(pluginId, numParams, offs, Logger:logger, severity) {
             LOGGER_DATESTAMPFORMAT_LENGTH);
     datestampBuffer[datestampBufferLen] = EOS;
     
+    new trace = dbg_trace_begin(), line;
+    new filenameBuffer[LOGGER_FILENAME_LENGTH+1];
+    new functionNameBuffer[LOGGER_FUNCTIONNAMEBUFFER_LENGTH+1];
+    dbg_trace_info(
+            trace,
+            line,
+            functionNameBuffer,
+            LOGGER_FUNCTIONNAMEBUFFER_LENGTH,
+            filenameBuffer,
+            LOGGER_FILENAME_LENGTH);
+    
     messageBufferLen = ArrayGetString(
             loggerMessageFormats,
             index,
@@ -465,6 +471,7 @@ log(pluginId, numParams, offs, Logger:logger, severity) {
     replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%filename", filenameBuffer);
     replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%time", timestampBuffer);
     replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%date", datestampBuffer);
+    replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%function", functionNameBuffer);
     replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%severity", SEVERITY[severity]);
     replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%message", buffer);
 
@@ -480,6 +487,10 @@ log(pluginId, numParams, offs, Logger:logger, severity) {
             LOGGER_PATH_LENGTH);
         pathBuffer[pathBufferLen] = EOS;
         
+        if (pathBuffer[pathBufferLen-1] != '/') {
+            pathBuffer[pathBufferLen++] = '/';
+        }
+
         pathBufferLen += ArrayGetString(
             loggerFilenameFormats,
             index,
