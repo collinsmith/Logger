@@ -5,23 +5,31 @@
 
 #include <amxconst>
 
-#define LEVEL_INVALID -1
-#define LEVEL_NONE    0
-#define LEVEL_ALL     LEVEL_DEBUG
+enum {
+    SEVERITY_INVALID = -1,
+    
+    SEVERITY_NONE    =  0,
 
-#define LEVEL_SEVERE  1
-#define LEVEL_WARNING 2
-#define LEVEL_INFO    3
-#define LEVEL_DEBUG   4
+    SEVERITY_ERROR   =  1,
+    SEVERITY_WARNING,
+    SEVERITY_INFO,
+    SEVERITY_DEBUG,
+    
+    SEVERITY_ALL,
+}
 
-stock const LEVEL[][] = {
-    "",
-    "SEVERE",
-    "WARNING",
-    "INFO",
-    "DEBUG",
+stock const SEVERITY[][] = {
+    "",      // SEVERITY_NONE
+
+    "ERROR", // SEVERITY_ERROR
+    "WARN",  // SEVERITY_WARNING
+    "INFO",  // SEVERITY_INFO
+    "DEBUG", // SEVERITY_DEBUG
+
+    "",      // SEVERITY_ALL
 };
 
 enum Logger {
+    All_Loggers = -1,
     Invalid_Logger
 };

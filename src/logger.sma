@@ -1,45 +1,148 @@
 #define VERSION_STRING "0.0.1"
 
-#define INITIAL_LOGGER_SIZE 4
-
-#define LOGGER_FILE_LENGTH 63
+#define INITIAL_LOGGERS_SIZE 4
+#define LOGGER_FILENAMEFORMAT_LENGTH LOGGER_PATH_LENGTH
+#define LOGGER_MESSAGEFORMAT_LENGTH 255
+#define LOGGER_TIMESTAMPFORMAT_LENGTH 31
+#define LOGGER_DATESTAMPFORMAT_LENGTH 31
+#define LOGGER_PATH_LENGTH (PLATFORM_MAX_PATH-1)
+#define LOGGER_FILENAME_LENGTH 31
+#define LOGGER_MESSAGEBUFFER_LENGTH 1023
+#define BUFFER_LENGTH 1023
 
 #include <amxmodx>
-
+#include <file>
 #include "include/logger_const.inc"
+#include "include/string_stocks.inc"
 #include "include/param_test_stocks.inc"
 
-#define BUFFER_LENGTH 1023
-static buffer[BUFFER_LENGTH+1];
-static filename[LOGGER_FILE_LENGTH+1];
-static Logger:currentLogger = Invalid_Logger;
+static const DEFAULT_FILENAME_FORMAT[] = "%filename_%date.log";
+static const DEFAULT_MESSAGE_FORMAT[] = "%time %severity %message";
+static const DEFAULT_DATESTAMP_FORMAT[] = "%Y-%m-%d";
+static const DEFAULT_TIMESTAMP_FORMAT[] = "%H:%M:%S";
 
-static numLoggers = 0;
-static Array:loggerFiles = Invalid_Array;
-static Array:loggerLevels = Invalid_Array;
+static filenameBufferLen;
+static filenameBuffer[LOGGER_FILENAME_LENGTH+1];
+
+static timestampBufferLen;
+static timestampBuffer[LOGGER_TIMESTAMPFORMAT_LENGTH+1];
+
+static datestampBufferLen;
+static datestampBuffer[LOGGER_DATESTAMPFORMAT_LENGTH+1];
+
+static messageBufferLen;
+static messageBuffer[LOGGER_MESSAGEBUFFER_LENGTH+1];
+
+static pathBufferLen;
+static pathBuffer[LOGGER_PATH_LENGTH+1];
+
+static bufferLen;
+static buffer[BUFFER_LENGTH+1];
+
+//static filenameFormatBufferLen;
+//static filenameFormatBuffer[LOGGER_FILENAMEFORMAT_LENGTH+1];
+
+static globalSeverity;
+static numLoggers;
+static Array:loggerFilenameFormats = Invalid_Array;
+static Array:loggerMessageFormats = Invalid_Array;
+static Array:loggerTimestampFormats = Invalid_Array;
+static Array:loggerDatestampFormats = Invalid_Array;
+static Array:loggerSeverities = Invalid_Array;
+static Array:loggerFilePaths = Invalid_Array;
+
+static Array:loggerFileNames = Invalid_Array;
+static Array:loggerFilePointers = Invalid_Array;
 
 public plugin_natives() {
     register_library("logger");
 
-    register_native("SetLogging", "_SetLogging", 0);
-    register_native("IsLoggingEnabled", "_IsLoggingEnabled", 0);
+    register_native("CreateLogger", "CreateLogger", 0);
+    register_native("DestroyLogger", "DestroyLogger", 0);
 
-    register_native("CreateLogger", "_CreateLogger", 0);
-    register_native("DestroyLogger", "_DestroyLogger", 0);
+    register_native("LoggerGetMinSeverity", "LoggerGetMinSeverity", 0);
+    register_native("LoggerSetMinSeverity", "LoggerSetMinSeverity", 0);
 
-    register_native("LoggerSetLevel", "_LoggerSetLevel", 0);
-    register_native("LoggerGetLevel", "_LoggerGetLevel", 0);
-    register_native("LoggerGetFile", "_LoggerGetFile", 0);
+    register_native("LoggerLogSevere", "LoggerLogSevere", 0);
+    register_native("LoggerLogWarning", "LoggerLogWarning", 0);
+    register_native("LoggerLogInfo", "LoggerLogInfo", 0);
+    register_native("LoggerLogDebug", "LoggerLogDebug", 0);
 
-    register_native("Log", "_Log", 0);
+    state severity_all;
+}
 
-    state logging;
+public plugin_init() {
+    register_plugin(.plugin_name = "Logger",
+        .version = getBuildId(),
+        .author = "Tirant");
+}
+
+public plugin_end() {
+    new len = ArraySize(loggerFilePointers);
+    for (new i = 0; i < len; i++) {
+        fclose(ArrayGetCell(loggerFilePointers, i));
+    }
+}
+
+getBuildId() {
+    new buildId[32];
+    formatex(buildId, charsmax(buildId), "%s.%s", VERSION_STRING, __DATE__);
+    return buildId;
+}
+
+initializeStructs() {
+    if (loggerFilenameFormats == Invalid_Array) {
+        loggerFilenameFormats = ArrayCreate(
+                .reserved = INITIAL_LOGGERS_SIZE,
+                .cellsize = LOGGER_FILENAMEFORMAT_LENGTH+1);
+    }
+
+    if (loggerMessageFormats == Invalid_Array) {
+        loggerMessageFormats = ArrayCreate(
+                .reserved = INITIAL_LOGGERS_SIZE,
+                .cellsize = LOGGER_MESSAGEFORMAT_LENGTH+1);
+    }
+
+    if (loggerDatestampFormats == Invalid_Array) {
+        loggerDatestampFormats = ArrayCreate(
+                .reserved = INITIAL_LOGGERS_SIZE,
+                .cellsize = LOGGER_DATESTAMPFORMAT_LENGTH+1);
+    }
+
+    if (loggerTimestampFormats == Invalid_Array) {
+        loggerTimestampFormats = ArrayCreate(
+                .reserved = INITIAL_LOGGERS_SIZE,
+                .cellsize = LOGGER_TIMESTAMPFORMAT_LENGTH+1);
+    }
+
+    if (loggerSeverities == Invalid_Array) {
+        loggerSeverities = ArrayCreate(
+                .reserved = INITIAL_LOGGERS_SIZE);
+    }
+
+    if (loggerFilePaths == Invalid_Array) {
+        loggerFilePaths = ArrayCreate(
+                .reserved = INITIAL_LOGGERS_SIZE,
+                .cellsize = LOGGER_PATH_LENGTH+1);
+    }
+
+    if (loggerFileNames == Invalid_Array) {
+        loggerFileNames = ArrayCreate(
+                .reserved = INITIAL_LOGGERS_SIZE,
+                .cellsize = LOGGER_FILENAME_LENGTH+1);
+    }
+
+    if (loggerFilePointers == Invalid_Array) {
+        loggerFilePointers = ArrayCreate(
+                .reserved = INITIAL_LOGGERS_SIZE);
+    }
 }
 
 isValidLogger(Logger:logger) {
     return Invalid_Logger < logger
-            && any:logger <= numLoggers
-            && ArrayGetCell(loggerLevels, convertLoggerToIndex(logger)) != LEVEL_INVALID;
+        && any:logger <= numLoggers
+        && ArrayGetCell(loggerSeverities, convertLoggerToArrayIndex(logger))
+            != SEVERITY_INVALID;
 }
 
 bool:isInvalidLoggerParam(const function[], Logger:logger) {
@@ -49,139 +152,182 @@ bool:isInvalidLoggerParam(const function[], Logger:logger) {
 
     log_error(
             AMX_ERR_NATIVE,
-            "[%s] Invalid logger specified: %d",
+            "[%s] Invalid logger handle specified: %d",
             function,
             logger);
     return true;
 }
 
-isValidLoggerLevel(level) {
-    return LEVEL_NONE <= level && level <= LEVEL_ALL;
+bool:isValidLoggerSeverity(severity) {
+    return SEVERITY_NONE < severity && severity < SEVERITY_ALL;
 }
 
-bool:isInvalidLoggerLevelParam(const function[], level) {
-    if (isValidLoggerLevel(level)) {
+bool:isInvalidLoggerSeverityParam(const function[], severity) {
+    if (isValidLoggerSeverity(severity)) {
         return false;
     }
 
     log_error(
             AMX_ERR_NATIVE,
-            "[%s] Invalid logger level specified: %d. \
+            "[%s] Invalid logger severity specified: %d. \
                   Log levels should be between %d and %d (inclusive)",
             function,
-            level,
-            LEVEL_NONE,
-            LEVEL_ALL);
+            severity,
+            SEVERITY_NONE,
+            SEVERITY_ALL);
     return true;
 }
 
-convertLoggerToIndex(Logger:logger) {
-    assert isValidLogger(logger);
+getLoggerSeverity(Logger:logger) {
+    assert isValidLogger(logger) || logger == All_Loggers;
+    if (logger == All_Loggers) {
+        return globalSeverity;
+    }
+    
+    new loggerIndex = convertLoggerToArrayIndex(logger);
+    return ArrayGetCell(loggerSeverities, loggerIndex);
+}
+
+setLoggerSeverity(Logger:logger, severity) {
+    assert isValidLogger(logger) || logger == All_Loggers;
+    assert isValidLoggerSeverity(severity);
+    if (logger == All_Loggers) {
+        new oldGlobalSeverity = getLoggerSeverity(logger);
+        globalSeverity = severity;
+        switch (globalSeverity) {
+            case SEVERITY_NONE:    state severity_none;
+            case SEVERITY_ERROR:   state severity_error;
+            case SEVERITY_WARNING: state severity_warning;
+            case SEVERITY_INFO:    state severity_info;
+            case SEVERITY_DEBUG:   state severity_debug;
+            case SEVERITY_ALL:     state severity_all;
+        }
+        return oldGlobalSeverity;
+    }
+
+    new oldLoggerSeverity = getLoggerSeverity(logger);
+    new loggerIndex = convertLoggerToArrayIndex(logger);
+    ArraySetCell(loggerSeverities, loggerIndex, severity);
+    return oldLoggerSeverity;
+}
+
+convertLoggerToArrayIndex(Logger:logger) {
     return any:logger-1;
 }
 
-getLoggerLevel(Logger:logger) {
+Logger:pushLogger(
+        const filenameFormat[],
+        const messageFormat[],
+        const datestampFormat[],
+        const timestampFormat[],
+        severity = SEVERITY_WARNING,
+        const path[],
+        const filename[],
+        file = 0) {
+    assert !isStringEmpty(filenameFormat);
+    assert !isStringEmpty(messageFormat);
+    assert !isStringEmpty(datestampFormat);
+    assert !isStringEmpty(timestampFormat);
+    assert !isStringEmpty(path);
+    assert !isStringEmpty(filename);
+    assert !isValidLoggerSeverity(severity);
+    new i = ArrayPushString(loggerFilenameFormats, filenameFormat);
+    new j = ArrayPushString(loggerMessageFormats, messageFormat);
+    new k = ArrayPushString(loggerDatestampFormats, datestampFormat);
+    new l = ArrayPushString(loggerTimestampFormats, timestampFormat);
+    new m = ArrayPushCell(loggerSeverities, severity);
+    new n = ArrayPushString(loggerFilePaths, path);
+    new o = ArrayPushString(loggerFileNames, path);
+    new p = ArrayPushCell(loggerFilePointers, file);
+    assert i == j
+        && i == k
+        && i == l
+        && i == m
+        && i == n
+        && i == o
+        && i == p;
+    return Logger:(i+1);
+}
+
+clearLogger(Logger:logger) {
     assert isValidLogger(logger);
-    new loggerIndex = convertLoggerToIndex(logger);
-    return ArrayGetCell(loggerLevels, loggerIndex);
+    new loggerIndex = convertLoggerToArrayIndex(logger);
+    fclose(ArrayGetCell(loggerFilePointers, loggerIndex));
+    ArraySetString(loggerFilenameFormats, loggerIndex, "");
+    ArraySetString(loggerMessageFormats, loggerIndex, "");
+    ArraySetString(loggerTimestampFormats, loggerIndex, "");
+    ArraySetString(loggerDatestampFormats, loggerIndex, "");
+    ArraySetCell(loggerSeverities, loggerIndex, SEVERITY_INVALID);
+    ArraySetString(loggerFilePaths, loggerIndex, "");
+    ArraySetString(loggerFileNames, loggerIndex, "");
+    ArraySetCell(loggerFilePointers, loggerIndex, 0);
 }
 
-setLoggerLevel(Logger:logger, level) {
-    assert isValidLogger(logger);
-    assert isValidLoggerLevel(level);
-    new oldLoggerLevel = getLoggerLevel(logger);
-    new loggerIndex = convertLoggerToIndex(logger);
-    ArraySetCell(loggerLevels, loggerIndex, level);
-    return oldLoggerLevel;
-}
-
-public bool:_SetLogging(pluginId, numParams) <not_logging> {
-    if (isInvalidNumberOfParams("_SetLogging", numParams, 1)) {
-        return false;
-    }
-
-    new bool:logging = bool:get_param(1);
-    if (logging) {
-        state logging;
-    }
-
-    return false;
-}
-
-public bool:_SetLogging(pluginId, numParams) <logging> {
-    if (isInvalidNumberOfParams("_SetLogging", numParams, 1)) {
-        return true;
-    }
-
-    new bool:logging = bool:get_param(1);
-    if (!logging) {
-        state not_logging;
-    }
-
-    return true;
-}
-
-public bool:_IsLoggingEnabled(pluginId, numParams) <not_logging> {
-    if (isInvalidNumberOfParams("_IsLoggingEnabled", numParams, 0)) {
-        return false;
-    }
-
-    return false;
-}
-
-public bool:_IsLoggingEnabled(pluginId, numParams) <logging> {
-    if (isInvalidNumberOfParams("_IsLoggingEnabled", numParams, 0)) {
-        return true;
-    }
-
-    return true;
-}
-
-public Logger:_CreateLogger(pluginId, numParams) {
-    if (isInvalidNumberOfParams("_CreateLogger", numParams, 1)) {
+public Logger:CreateLogger(pluginId, numParams) {
+    if (isInvalidNumberOfParams("CreateLogger", numParams, 6)) {
         return Invalid_Logger;
     }
 
-    new szTime[16];
-    get_time("%Y-%m-%d", szTime, charsmax(szTime));
+    initializeStructs();
 
-    new filename[32], len1;
-    len1 = get_string(1, filename, 31);
-    if (len1 > 0) {
-        filename[len1] = EOS;
-    } else {
-        get_plugin(.index = pluginId, .filename = filename, .len1 = 31);
-        filename[strlen(filename)-5] = EOS;
+    new tempLen;
+
+    new filenameFormat[LOGGER_FILENAMEFORMAT_LENGTH+1];
+    get_string(1, filenameFormat, LOGGER_FILENAMEFORMAT_LENGTH);
+    if (isStringEmpty(filenameFormat)) {
+        tempLen = copy(filenameFormat, LOGGER_FILENAMEFORMAT_LENGTH, DEFAULT_FILENAME_FORMAT);
+        filenameFormat[tempLen] = EOS;
     }
 
-    new loggerFile[LOGGER_FILE_LENGTH+1];
-    formatex(loggerFile, LOGGER_FILE_LENGTH, "%s_%s.log", filename, szTime);
-    
-    if (loggerFiles == Invalid_Array) {
-        loggerFiles = ArrayCreate(LOGGER_FILE_LENGTH+1, INITIAL_LOGGER_SIZE);
-    }
-    
-    if (loggerLevels == Invalid_Array) {
-        loggerLevels = ArrayCreate(1, INITIAL_LOGGER_SIZE);
+    new messageFormat[LOGGER_MESSAGEFORMAT_LENGTH+1];
+    get_string(2, messageFormat, LOGGER_MESSAGEFORMAT_LENGTH);
+    if (isStringEmpty(messageFormat)) {
+        tempLen = copy(messageFormat, LOGGER_MESSAGEFORMAT_LENGTH, DEFAULT_MESSAGE_FORMAT);
+        messageFormat[tempLen] = EOS;
     }
 
-    new Logger:logger = Logger:(ArrayPushString(loggerFiles, loggerFile)+1);
-    ArrayPushCell(loggerLevels, LEVEL_WARNING);
-    currentLogger = logger;
-    numLoggers++;
-    return logger;
+    new timestampFormat[LOGGER_TIMESTAMPFORMAT_LENGTH+1];
+    tempLen = get_string(3, timestampFormat, LOGGER_TIMESTAMPFORMAT_LENGTH);
+    if (isStringEmpty(timestampFormat)) {
+        tempLen = copy(timestampFormat, LOGGER_TIMESTAMPFORMAT_LENGTH, DEFAULT_TIMESTAMP_FORMAT);
+        timestampFormat[tempLen] = EOS;
+    }
+
+    new datestampFormat[LOGGER_DATESTAMPFORMAT_LENGTH+1];
+    tempLen = get_string(4, datestampFormat, LOGGER_DATESTAMPFORMAT_LENGTH);
+    if (isStringEmpty(datestampFormat)) {
+        tempLen = copy(datestampFormat, LOGGER_DATESTAMPFORMAT_LENGTH, DEFAULT_DATESTAMP_FORMAT);
+        datestampFormat[tempLen] = EOS;
+    }
+
+    new severity = get_param(5);
+    if (isInvalidLoggerSeverityParam("CreateLogger", severity)) {
+        return Invalid_Logger;
+    }
+
+    new path[LOGGER_PATH_LENGTH+1];
+    tempLen = get_localinfo("amxx_logdir", path, LOGGER_PATH_LENGTH);
+    tempLen += get_string(6, path[tempLen], LOGGER_PATH_LENGTH-tempLen);
+
+    new filename[LOGGER_FILENAME_LENGTH+1];
+    get_plugin(
+            .index = pluginId,
+            .filename = filename,
+            .len1 = LOGGER_FILENAME_LENGTH);
+    tempLen = strlen(filename)-5;
+    filename[tempLen] = EOS;
+
+    return pushLogger(filenameFormat, messageFormat, timestampFormat, datestampFormat, severity, path, filename);
 }
 
-public bool:_DestroyLogger(pluginId, numParams) {
-    if (isInvalidNumberOfParams("_DestroyLogger", numParams, 1)) {
+public bool:DestroyLogger(pluginId, numParams) {
+    if (isInvalidNumberOfParams("DestroyLogger", numParams, 1)) {
         return false;
     }
 
     new Logger:logger = Logger:get_param_byref(1);
     if (isValidLogger(logger)) {
-        new loggerIndex = convertLoggerToIndex(logger);
-        ArraySetString(loggerFiles, loggerIndex, "<DELETED>");
-        ArraySetCell(loggerLevels, loggerIndex, LEVEL_INVALID);
+        clearLogger(logger);
         set_param_byref(1, any:Invalid_Logger);
         return true;
     }
@@ -189,83 +335,194 @@ public bool:_DestroyLogger(pluginId, numParams) {
     return false;
 }
 
-public _LoggerSetLevel(pluginId, numParams) {
-    if (isInvalidNumberOfParams("_LoggerSetLevel", numParams, 2)) {
-        return LEVEL_INVALID;
+public LoggerGetMinSeverity(pluginId, numParams) {
+    if (isInvalidNumberOfParams("LoggerGetMinSeverity", numParams, 1)) {
+        return SEVERITY_INVALID;
     }
 
     new Logger:logger = Logger:get_param(1);
-    if (isInvalidLoggerParam("_LoggerSetLevel", logger)) {
-        return LEVEL_INVALID;
+    if (logger != All_Loggers && isInvalidLoggerParam("LoggerGetMinSeverity", logger)) {
+        return SEVERITY_INVALID;
     }
 
-    new level = get_param(2);
-    if (isInvalidLoggerLevelParam("_LoggerSetLevel", level)) {
-        return LEVEL_INVALID;
-    }
-
-    return setLoggerLevel(logger, level);
+    return getLoggerSeverity(logger);
 }
 
-public _LoggerGetLevel(pluginId, numParams) {
-    if (isInvalidNumberOfParams("_LoggerGetLevel", numParams, 1)) {
-        return LEVEL_INVALID;
+public LoggerSetMinSeverity(pluginId, numParams) {
+    if (isInvalidNumberOfParams("LoggerSetMinSeverity", numParams, 2)) {
+        return SEVERITY_INVALID;
     }
 
     new Logger:logger = Logger:get_param(1);
-    if (isInvalidLoggerParam("_LoggerGetLevel", logger)) {
-        return LEVEL_INVALID;
+    new severity = get_param(2);
+    if (logger != All_Loggers && isInvalidLoggerParam("LoggerSetMinSeverity", logger)) {
+        return SEVERITY_INVALID;
+    }
+    
+    if (isInvalidLoggerSeverityParam("LoggerSetMinSeverity", severity)) {
+        return SEVERITY_INVALID;
     }
 
-    return getLoggerLevel(logger);
+    return setLoggerSeverity(logger, severity);
 }
 
-public _LoggerGetFile(pluginId, numParams) {
-    if (isInvalidNumberOfParams("_LoggerGetFile", numParams, 3)) {
-        return -1;
-    }
-
-    new Logger:logger = Logger:get_param(1);
-    if (isInvalidLoggerParam("_LoggerGetFile", logger)) {
-        return -1;
-    }
-
-    new loggerIndex = convertLoggerToIndex(logger);
-    new filenameLen = ArrayGetString(loggerFiles, loggerIndex, filename, LOGGER_FILE_LENGTH);
-    filename[filenameLen] = EOS;
-    currentLogger = logger;
-    return set_string(2, filename, get_param(3));
-}
-
-public _Log(pluginId, numParams) <> {
-}
-
-public _Log(pluginId, numParams) <logging> {
-    if (isInvalidNumberOfParamsMin("_Log", numParams, 3)) {
+logError(pluginId, numParams) {
+#pragma unused pluginId, numParams
+    if (isInvalidNumberOfParamsMin("LoggerLogError", numParams, 2)) {
         return;
     }
 
-    new Logger:logger = Logger:get_param(1);
-    if (isInvalidLoggerParam("_Log", logger)) {
+    log(pluginId, numParams, Logger:get_param(1), SEVERITY_ERROR);
+}
+
+logWarning(pluginId, numParams) {
+#pragma unused pluginId, numParams
+    if (isInvalidNumberOfParamsMin("LoggerLogWarning", numParams, 2)) {
         return;
     }
 
-    new loggerIndex = convertLoggerToIndex(logger);
+    log(pluginId, numParams, Logger:get_param(1), SEVERITY_WARNING);
+}
 
-    new level = get_param(2);
-    if (level < 0 || ArrayGetCell(loggerLevels, loggerIndex) < level) {
-       return;
+logInfo(pluginId, numParams) {
+#pragma unused pluginId, numParams
+    if (isInvalidNumberOfParamsMin("LoggerLogInfo", numParams, 2)) {
+        return;
     }
 
-    new bufferLen = formatex(buffer, BUFFER_LENGTH, "[%s] ", LEVEL[level]);
-    bufferLen += vdformat(buffer[bufferLen], BUFFER_LENGTH, 3, 4);
+    log(pluginId, numParams, Logger:get_param(1), SEVERITY_INFO);
+}
+
+logDebug(pluginId, numParams) {
+#pragma unused pluginId, numParams
+    if (isInvalidNumberOfParamsMin("LoggerLogDebug", numParams, 2)) {
+        return;
+    }
+
+    log(pluginId, numParams, Logger:get_param(1), SEVERITY_DEBUG);
+}
+
+log(pluginId, numParams, Logger:logger, severity) {
+#pragma unused pluginId, numParams
+    //new Logger:logger = Logger:get_param(1);
+    if (isInvalidLoggerParam("logError", logger)) {
+        return;
+    }
+
+    new index = convertLoggerToArrayIndex(logger);
+    //new severity = get_param(2);
+    new loggerSeverity = ArrayGetCell(loggerSeverities, index);
+    if (!isValidLoggerSeverity(severity)
+            || !isValidLoggerSeverity(loggerSeverity)) {
+        return;
+    }
+
+    filenameBufferLen = ArrayGetString(
+            loggerFileNames,
+            index,
+            filenameBuffer,
+            LOGGER_FILENAME_LENGTH);
+    filenameBuffer[filenameBufferLen] = EOS;
+    
+    bufferLen = ArrayGetString(
+            loggerTimestampFormats,
+            index,
+            buffer,
+            BUFFER_LENGTH);
     buffer[bufferLen] = EOS;
 
-    if (currentLogger != logger) {
-        new filenameLen = ArrayGetString(loggerFiles, loggerIndex, filename, LOGGER_FILE_LENGTH);
-        filename[filenameLen] = EOS;
-        currentLogger = logger;
+    timestampBufferLen = get_time(
+            buffer,
+            timestampBuffer,
+            LOGGER_TIMESTAMPFORMAT_LENGTH);
+    timestampBuffer[timestampBufferLen] = EOS;
+    
+    bufferLen = ArrayGetString(
+            loggerDatestampFormats,
+            index,
+            buffer,
+            BUFFER_LENGTH);
+    buffer[bufferLen] = EOS;
+
+    datestampBufferLen = get_time(
+            buffer,
+            datestampBuffer,
+            LOGGER_DATESTAMPFORMAT_LENGTH);
+    datestampBuffer[datestampBufferLen] = EOS;
+    
+    messageBufferLen = ArrayGetString(
+            loggerMessageFormats,
+            index,
+            messageBuffer,
+            LOGGER_MESSAGEFORMAT_LENGTH);
+    messageBuffer[messageBufferLen] = EOS;
+
+    bufferLen = vdformat(buffer, BUFFER_LENGTH, 2, 3);
+    buffer[bufferLen] = EOS;
+
+    replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%filename", filenameBuffer);
+    replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%time", timestampBuffer);
+    replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%date", datestampBuffer);
+    replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%severity", SEVERITY[severity]);
+    replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%message", buffer);
+
+    new file = ArrayGetCell(
+            loggerFilePointers,
+            index);
+
+    if (file == 0) {
+        pathBufferLen = ArrayGetString(
+            loggerFilePaths,
+            index,
+            pathBuffer,
+            LOGGER_PATH_LENGTH);
+        pathBuffer[pathBufferLen] = EOS;
+        
+        pathBufferLen += ArrayGetString(
+            loggerFilenameFormats,
+            index,
+            pathBuffer[pathBufferLen],
+            LOGGER_PATH_LENGTH-pathBufferLen);
+        pathBuffer[pathBufferLen] = EOS;
+
+        replace_all(pathBuffer, LOGGER_PATH_LENGTH, "%filename", filenameBuffer);
+        replace_all(pathBuffer, LOGGER_PATH_LENGTH, "%date", datestampBuffer);
+
+        file = fopen(pathBuffer, "a");
     }
 
-    log_to_file(filename, buffer);
+    fputs(file, messageBuffer);
+    fflush(file);
 }
+
+public LoggerLogError(pluginId, numParams) <>                 ;
+public LoggerLogError(pluginId, numParams) <severity_none>    ;
+public LoggerLogError(pluginId, numParams) <severity_error>   logError(pluginId, numParams);
+public LoggerLogError(pluginId, numParams) <severity_warning> logError(pluginId, numParams);
+public LoggerLogError(pluginId, numParams) <severity_info>    logError(pluginId, numParams);
+public LoggerLogError(pluginId, numParams) <severity_debug>   logError(pluginId, numParams);
+public LoggerLogError(pluginId, numParams) <severity_all>     logError(pluginId, numParams);
+
+public LoggerLogWarning(pluginId, numParams) <>                 ;
+public LoggerLogWarning(pluginId, numParams) <severity_none>    ;
+public LoggerLogWarning(pluginId, numParams) <severity_error>   ;
+public LoggerLogWarning(pluginId, numParams) <severity_warning> logWarning(pluginId, numParams);
+public LoggerLogWarning(pluginId, numParams) <severity_info>    logWarning(pluginId, numParams);
+public LoggerLogWarning(pluginId, numParams) <severity_debug>   logWarning(pluginId, numParams);
+public LoggerLogWarning(pluginId, numParams) <severity_all>     logWarning(pluginId, numParams);
+
+public LoggerLogInfo(pluginId, numParams) <>                 ;
+public LoggerLogInfo(pluginId, numParams) <severity_none>    ;
+public LoggerLogInfo(pluginId, numParams) <severity_error>   ;
+public LoggerLogInfo(pluginId, numParams) <severity_warning> ;
+public LoggerLogInfo(pluginId, numParams) <severity_info>    logInfo(pluginId, numParams);
+public LoggerLogInfo(pluginId, numParams) <severity_debug>   logInfo(pluginId, numParams);
+public LoggerLogInfo(pluginId, numParams) <severity_all>     logInfo(pluginId, numParams);
+
+public LoggerLogDebug(pluginId, numParams) <>                 ;
+public LoggerLogDebug(pluginId, numParams) <severity_none>    ;
+public LoggerLogDebug(pluginId, numParams) <severity_error>   ;
+public LoggerLogDebug(pluginId, numParams) <severity_warning> ;
+public LoggerLogDebug(pluginId, numParams) <severity_info>    ;
+public LoggerLogDebug(pluginId, numParams) <severity_debug>   logDebug(pluginId, numParams);
+public LoggerLogDebug(pluginId, numParams) <severity_all>     logDebug(pluginId, numParams);
