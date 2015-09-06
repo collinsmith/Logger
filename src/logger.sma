@@ -68,6 +68,8 @@ public plugin_natives() {
     register_native("LoggerLogInfo", "LoggerLogInfo", 0);
     register_native("LoggerLogDebug", "LoggerLogDebug", 0);
 
+    register_native("LoggerLog", "LoggerLog", 0);
+
     state severity_all;
 }
 
@@ -366,43 +368,43 @@ public LoggerSetMinSeverity(pluginId, numParams) {
     return setLoggerSeverity(logger, severity);
 }
 
-logError(pluginId, numParams) {
+logError(pluginId, numParams, offs) {
 #pragma unused pluginId, numParams
     if (isInvalidNumberOfParamsMin("LoggerLogError", numParams, 2)) {
         return;
     }
 
-    log(pluginId, numParams, Logger:get_param(1), SEVERITY_ERROR);
+    log(pluginId, numParams, offs, Logger:get_param(1), SEVERITY_ERROR);
 }
 
-logWarning(pluginId, numParams) {
+logWarning(pluginId, numParams, offs) {
 #pragma unused pluginId, numParams
     if (isInvalidNumberOfParamsMin("LoggerLogWarning", numParams, 2)) {
         return;
     }
 
-    log(pluginId, numParams, Logger:get_param(1), SEVERITY_WARNING);
+    log(pluginId, numParams, offs, Logger:get_param(1), SEVERITY_WARNING);
 }
 
-logInfo(pluginId, numParams) {
+logInfo(pluginId, numParams, offs) {
 #pragma unused pluginId, numParams
     if (isInvalidNumberOfParamsMin("LoggerLogInfo", numParams, 2)) {
         return;
     }
 
-    log(pluginId, numParams, Logger:get_param(1), SEVERITY_INFO);
+    log(pluginId, numParams, offs, Logger:get_param(1), SEVERITY_INFO);
 }
 
-logDebug(pluginId, numParams) {
+logDebug(pluginId, numParams, offs) {
 #pragma unused pluginId, numParams
     if (isInvalidNumberOfParamsMin("LoggerLogDebug", numParams, 2)) {
         return;
     }
 
-    log(pluginId, numParams, Logger:get_param(1), SEVERITY_DEBUG);
+    log(pluginId, numParams, offs, Logger:get_param(1), SEVERITY_DEBUG);
 }
 
-log(pluginId, numParams, Logger:logger, severity) {
+log(pluginId, numParams, offs, Logger:logger, severity) {
 #pragma unused pluginId, numParams
     //new Logger:logger = Logger:get_param(1);
     if (isInvalidLoggerParam("logError", logger)) {
@@ -457,7 +459,7 @@ log(pluginId, numParams, Logger:logger, severity) {
             LOGGER_MESSAGEFORMAT_LENGTH);
     messageBuffer[messageBufferLen] = EOS;
 
-    bufferLen = vdformat(buffer, BUFFER_LENGTH, 2, 3);
+    bufferLen = vdformat(buffer, BUFFER_LENGTH, 2+offs, 3+offs);
     buffer[bufferLen] = EOS;
 
     replace_all(messageBuffer, LOGGER_MESSAGEBUFFER_LENGTH, "%filename", filenameBuffer);
@@ -495,34 +497,47 @@ log(pluginId, numParams, Logger:logger, severity) {
     fflush(file);
 }
 
-public LoggerLogError(pluginId, numParams) <>                 ;
-public LoggerLogError(pluginId, numParams) <severity_none>    ;
-public LoggerLogError(pluginId, numParams) <severity_error>   logError(pluginId, numParams);
-public LoggerLogError(pluginId, numParams) <severity_warning> logError(pluginId, numParams);
-public LoggerLogError(pluginId, numParams) <severity_info>    logError(pluginId, numParams);
-public LoggerLogError(pluginId, numParams) <severity_debug>   logError(pluginId, numParams);
-public LoggerLogError(pluginId, numParams) <severity_all>     logError(pluginId, numParams);
+public LoggerLogError(pluginId, numParams, offs) <>                 ;
+public LoggerLogError(pluginId, numParams, offs) <severity_none>    ;
+public LoggerLogError(pluginId, numParams, offs) <severity_error>   logError(pluginId, numParams, offs);
+public LoggerLogError(pluginId, numParams, offs) <severity_warning> logError(pluginId, numParams, offs);
+public LoggerLogError(pluginId, numParams, offs) <severity_info>    logError(pluginId, numParams, offs);
+public LoggerLogError(pluginId, numParams, offs) <severity_debug>   logError(pluginId, numParams, offs);
+public LoggerLogError(pluginId, numParams, offs) <severity_all>     logError(pluginId, numParams, offs);
 
-public LoggerLogWarning(pluginId, numParams) <>                 ;
-public LoggerLogWarning(pluginId, numParams) <severity_none>    ;
-public LoggerLogWarning(pluginId, numParams) <severity_error>   ;
-public LoggerLogWarning(pluginId, numParams) <severity_warning> logWarning(pluginId, numParams);
-public LoggerLogWarning(pluginId, numParams) <severity_info>    logWarning(pluginId, numParams);
-public LoggerLogWarning(pluginId, numParams) <severity_debug>   logWarning(pluginId, numParams);
-public LoggerLogWarning(pluginId, numParams) <severity_all>     logWarning(pluginId, numParams);
+public LoggerLogWarning(pluginId, numParams, offs) <>                 ;
+public LoggerLogWarning(pluginId, numParams, offs) <severity_none>    ;
+public LoggerLogWarning(pluginId, numParams, offs) <severity_error>   ;
+public LoggerLogWarning(pluginId, numParams, offs) <severity_warning> logWarning(pluginId, numParams, offs);
+public LoggerLogWarning(pluginId, numParams, offs) <severity_info>    logWarning(pluginId, numParams, offs);
+public LoggerLogWarning(pluginId, numParams, offs) <severity_debug>   logWarning(pluginId, numParams, offs);
+public LoggerLogWarning(pluginId, numParams, offs) <severity_all>     logWarning(pluginId, numParams, offs);
 
-public LoggerLogInfo(pluginId, numParams) <>                 ;
-public LoggerLogInfo(pluginId, numParams) <severity_none>    ;
-public LoggerLogInfo(pluginId, numParams) <severity_error>   ;
-public LoggerLogInfo(pluginId, numParams) <severity_warning> ;
-public LoggerLogInfo(pluginId, numParams) <severity_info>    logInfo(pluginId, numParams);
-public LoggerLogInfo(pluginId, numParams) <severity_debug>   logInfo(pluginId, numParams);
-public LoggerLogInfo(pluginId, numParams) <severity_all>     logInfo(pluginId, numParams);
+public LoggerLogInfo(pluginId, numParams, offs) <>                 ;
+public LoggerLogInfo(pluginId, numParams, offs) <severity_none>    ;
+public LoggerLogInfo(pluginId, numParams, offs) <severity_error>   ;
+public LoggerLogInfo(pluginId, numParams, offs) <severity_warning> ;
+public LoggerLogInfo(pluginId, numParams, offs) <severity_info>    logInfo(pluginId, numParams, offs);
+public LoggerLogInfo(pluginId, numParams, offs) <severity_debug>   logInfo(pluginId, numParams, offs);
+public LoggerLogInfo(pluginId, numParams, offs) <severity_all>     logInfo(pluginId, numParams, offs);
 
-public LoggerLogDebug(pluginId, numParams) <>                 ;
-public LoggerLogDebug(pluginId, numParams) <severity_none>    ;
-public LoggerLogDebug(pluginId, numParams) <severity_error>   ;
-public LoggerLogDebug(pluginId, numParams) <severity_warning> ;
-public LoggerLogDebug(pluginId, numParams) <severity_info>    ;
-public LoggerLogDebug(pluginId, numParams) <severity_debug>   logDebug(pluginId, numParams);
-public LoggerLogDebug(pluginId, numParams) <severity_all>     logDebug(pluginId, numParams);
+public LoggerLogDebug(pluginId, numParams, offs) <>                 ;
+public LoggerLogDebug(pluginId, numParams, offs) <severity_none>    ;
+public LoggerLogDebug(pluginId, numParams, offs) <severity_error>   ;
+public LoggerLogDebug(pluginId, numParams, offs) <severity_warning> ;
+public LoggerLogDebug(pluginId, numParams, offs) <severity_info>    ;
+public LoggerLogDebug(pluginId, numParams, offs) <severity_debug>   logDebug(pluginId, numParams, offs);
+public LoggerLogDebug(pluginId, numParams, offs) <severity_all>     logDebug(pluginId, numParams, offs);
+
+public LoggerLog(pluginId, numParams) {
+    if (isInvalidNumberOfParamsMin("LoggerLog", numParams, 3)) {
+        return;
+    }
+
+    switch (get_param(2)) {
+        case SEVERITY_ERROR:   LoggerLogError(pluginId, numParams, 1);
+        case SEVERITY_WARNING: LoggerLogWarning(pluginId, numParams, 1);
+        case SEVERITY_INFO:    LoggerLogInfo(pluginId, numParams, 1);
+        case SEVERITY_DEBUG:   LoggerLogDebug(pluginId, numParams, 1);
+    }
+}

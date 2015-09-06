@@ -25,3 +25,5 @@ native LoggerLogError(Logger:logger, const format[], any:...);
 native LoggerLogWarning(Logger:logger, const format[], any:...);
 native LoggerLogInfo(Logger:logger, const format[], any:...);
 native LoggerLogDebug(Logger:logger, const format[], any:...);
+
+native LoggerLog(Logger:logger, severity, const format[], any:...);
