@@ -410,7 +410,8 @@ log(pluginId, numParams, offs, Logger:logger, severity) {
     //new severity = get_param(2);
     new loggerSeverity = ArrayGetCell(loggerSeverities, index);
     if (!isValidLoggerSeverity(severity)
-            || !isValidLoggerSeverity(loggerSeverity)) {
+            || !isValidLoggerSeverity(loggerSeverity)
+            || severity <= loggerSeverity) {
         return;
     }
 
