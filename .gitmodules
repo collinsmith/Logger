@@ -1,0 +1,6 @@
+[submodule "src/src/logger/include"]
+	path = src/src/logger/include
+	url = https://github.com/collinsmith/Stocks.git
+[submodule "src/include/Stocks"]
+	path = src/include/Stocks
+	url = https://github.com/collinsmith/Stocks.git

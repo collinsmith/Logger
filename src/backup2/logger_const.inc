@@ -5,6 +5,14 @@
 
 #include <amxconst>
 
+stock const KEY_NAMEFORMAT[] = "nameFormat";
+stock const KEY_MESSAGEFORMAT[] = "messageFormat";
+stock const KEY_DATESTAMPFORMAT[] = "datestampFormat";
+stock const KEY_TIMESTAMPFORMAT[] = "timestampFormat";
+stock const KEY_MINSEVERITY[] = "minSeverity";
+stock const KEY_PATH[] = "path";
+stock const KEY_FILEPOINTER[] = "filePointer";
+
 enum {
     SEVERITY_INVALID = -1,
     
