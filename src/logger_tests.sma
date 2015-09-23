@@ -2,14 +2,7 @@
 #include <logger>
 
 public plugin_init() {
-    new Logger:logger = LoggerCreate(/*
-        Severity_Lowest,
-        "%i-%m",
-        "[%5v] [%t] %p::%f %m",
-        "%Y-%m-%d",
-        "%H:%M:%S",
-        "%p/%d",
-        "    %n::f : %l"*/);
+    new Logger:logger = LoggerCreate();
     LoggerSetVerbosity(logger, Severity_Lowest);
     LoggerSetNameFormat(logger, "%i-%m");
     LoggerSetMessageFormat(logger, "[%5v] [%t] %p::%f %m");
