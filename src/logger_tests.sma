@@ -11,10 +11,10 @@ public plugin_init() {
     LoggerSetPathFormat(logger, "%p/%d");
     LoggerSetTraceFormat(logger, "    %n::%f : %l");
 
-    LoggerLogDebug(logger, false, "This is a debug message");
-    LoggerLogInfo(logger, false, "This is an info message");
-    LoggerLogWarn(logger, true, "This is a warn message");
-    LoggerLogError(logger, true, "This is an error message");
+    LoggerLogDebug(logger, "This is a debug message");
+    LoggerLogInfo(logger, "This is an info message");
+    LoggerLogWarn(logger, "This is a warn message");
+    LoggerLogError(logger, "This is an error message");
 
     LoggerDestroy(logger);
 }
