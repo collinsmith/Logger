@@ -5,7 +5,7 @@ public plugin_init() {
     new Logger:logger = LoggerCreate();
     LoggerSetVerbosity(logger, Severity_Lowest);
     LoggerSetNameFormat(logger, "%i-%m");
-    LoggerSetMessageFormat(logger, "[%5v] [%t] %p::%f %s");
+    LoggerSetMessageFormat(logger, "[%5v] [%t] %p::%f - %s");
     LoggerSetDateFormat(logger, "%Y-%m-%d");
     LoggerSetTimeFormat(logger, "%H:%M:%S");
     LoggerSetPathFormat(logger, "%p/%d");
