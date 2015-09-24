@@ -18,3 +18,24 @@ public plugin_init() {
 
     LoggerDestroy(logger);
 }
+
+public OnLoggerCreated(
+        const Logger: logger,
+        const Severity: verbosity,
+        const name[],
+        const nameFormat[],
+        const msgFormat[],
+        const dateFormat[],
+        const timeFormat[],
+        const pathFormat[],
+        const traceFormat[]) {
+    server_print("logger = %d", logger);
+    server_print("verbosity = %d", verbosity);
+    server_print("name = %s", name);
+    server_print("nameFormat = %s", nameFormat);
+    server_print("msgFormat = %s", msgFormat);
+    server_print("dateFormat = %s", dateFormat);
+    server_print("timeFormat = %s", timeFormat);
+    server_print("pathFormat = %s", pathFormat);
+    server_print("traceFormat = %s", traceFormat);
+}

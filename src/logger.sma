@@ -5,24 +5,29 @@
 
 static g_MinVerbosityCvar;
 
+static temp[2];
+static Trie: cvarMap = Invalid_Trie;
+
 public plugin_init() {
     register_plugin(
-        .plugin_name = "Logger CVar Manager",
-        .version = getBuildId(),
-        .author = "Tirant");
+            .plugin_name = "Logger CVar Manager",
+            .version = getBuildId(),
+            .author = "Tirant");
+
+    cvarMap = TrieCreate();
 
     new defaultValue[32];
     num_to_str(any:DEFAULT_LOGGER_VERBOSITY, defaultValue, charsmax(defaultValue));
 
     g_MinVerbosityCvar = create_cvar(
-        .name = "logger_min_verbosity",
-        .string = defaultValue,
-        .flags = FCVAR_NONE,
-        .description = "Controls the minimum severity a message must have in \
-                order to be logged across all loggers",
-        .has_min = true,
-        .min_val = float(any:Severity_None),
-        .has_max = false);
+            .name = "logger_min_verbosity",
+            .string = defaultValue,
+            .flags = FCVAR_NONE,
+            .description = "Controls the minimum severity a message must have in \
+                    order to be logged across all loggers",
+            .has_min = true,
+            .min_val = float(any:Severity_None),
+            .has_max = false);
     hook_cvar_change(g_MinVerbosityCvar, "onMinVerbosityCvarChanged");
 }
 
@@ -37,3 +42,47 @@ public onMinVerbosityCvarChanged(pcvar, const old_value[], const new_value[]) {
     LoggerSetVerbosity(All_Loggers, severity(str_to_num(new_value)));
 }
 
+public OnLoggerCreated(
+        const Logger: logger,
+        const Severity: verbosity,
+        const name[],
+        const nameFormat[],
+        const msgFormat[],
+        const dateFormat[],
+        const timeFormat[],
+        const pathFormat[],
+        const traceFormat[]) {
+    new cvarName[32];
+    formatex(cvarName, charsmax(cvarName), "%s_logger_verbosity", name);
+
+    new defaultValue[32];
+    num_to_str(any:verbosity, defaultValue, charsmax(defaultValue));
+
+    new cvarDescription[256];
+    formatex(cvarDescription, charsmax(cvarDescription), "Controls the minimum \
+            severity that the %s logger will log",
+            name);
+
+    new cvarVerbosity = create_cvar(
+            .name = cvarName,
+            .string = defaultValue,
+            .flags = FCVAR_NONE,
+            .description = cvarDescription,
+            .has_min = true,
+            .min_val = float(any:Severity_None),
+            .has_max = false);
+
+    temp[0] = cvarVerbosity;
+    TrieSetCell(cvarMap, temp, logger);
+
+    hook_cvar_change(cvarVerbosity, "onVerbosityCvarChanged");
+}
+
+public onVerbosityCvarChanged(pcvar, const old_value[], const new_value[]) {
+    assert cvarMap != Invalid_Trie;
+
+    temp[0] = pcvar;
+    new Logger: logger;
+    assert Logger:TrieGetCell(cvarMap, temp, logger);
+    LoggerSetVerbosity(logger, severity(str_to_num(new_value)));
+}
