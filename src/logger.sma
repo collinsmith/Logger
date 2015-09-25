@@ -14,8 +14,6 @@ public plugin_init() {
             .version = getBuildId(),
             .author = "Tirant");
 
-    cvarMap = TrieCreate();
-
     new defaultValue[32];
     num_to_str(any:DEFAULT_LOGGER_VERBOSITY, defaultValue, charsmax(defaultValue));
 
@@ -28,6 +26,10 @@ public plugin_init() {
             .has_min = true,
             .min_val = float(any:Severity_None),
             .has_max = false);
+    
+    new curValue[32];
+    get_pcvar_string(g_MinVerbosityCvar, curValue, charsmax(curValue));
+    LoggerSetVerbosity(All_Loggers, severity(str_to_num(curValue)));
     hook_cvar_change(g_MinVerbosityCvar, "onMinVerbosityCvarChanged");
 }
 
@@ -73,8 +75,14 @@ public OnLoggerCreated(
             .has_max = false);
 
     temp[0] = cvarVerbosity;
-    TrieSetCell(cvarMap, temp, logger);
+    if (cvarMap == Invalid_Trie) {
+        cvarMap = TrieCreate();
+        TrieSetCell(cvarMap, temp, logger);
+    }
 
+    new curValue[32];
+    get_pcvar_string(cvarVerbosity, curValue, charsmax(curValue));
+    LoggerSetVerbosity(logger, severity(str_to_num(curValue)));
     hook_cvar_change(cvarVerbosity, "onVerbosityCvarChanged");
 }
 
@@ -83,6 +91,7 @@ public onVerbosityCvarChanged(pcvar, const old_value[], const new_value[]) {
 
     temp[0] = pcvar;
     new Logger: logger;
-    assert Logger:TrieGetCell(cvarMap, temp, logger);
+    assert TrieGetCell(cvarMap, temp, logger);
+    assert logger > Invalid_Logger;
     LoggerSetVerbosity(logger, severity(str_to_num(new_value)));
 }
