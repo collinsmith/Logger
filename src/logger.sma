@@ -83,7 +83,7 @@ public OnLoggerCreated(
 
     new curValue[32];
     get_pcvar_string(cvarVerbosity, curValue, charsmax(curValue));
-    LoggerSetVerbosity(logger, severity(str_to_num(curValue)));
+    onVerbosityCvarChanged(cvarVerbosity, NULL_STRING, curValue);
     hook_cvar_change(cvarVerbosity, "onVerbosityCvarChanged");
 }
 
